@@ -65,6 +65,15 @@ export function readFileSnapshot(root: string, rel: string): FileSnapshot | unde
   return { file: rel, abs, size: st.size, mtimeMs: st.mtimeMs, hash: hashText(text) };
 }
 
+function splitOversizedChunk(text: string, maxChars: number): string[] {
+  const out: string[] = [];
+  for (let i = 0; i < text.length; i += maxChars) {
+    const part = text.slice(i, i + maxChars).trim();
+    if (part.length >= 20) out.push(part);
+  }
+  return out;
+}
+
 export function chunkFile(root: string, rel: string, config: SemanticGrepConfig, knownHash?: string): TextChunk[] {
   const abs = path.join(root, rel);
   const text = readFileSync(abs, "utf8");
@@ -79,6 +88,14 @@ export function chunkFile(root: string, rel: string, config: SemanticGrepConfig,
     const part = lines.slice(i, i + size);
     const chunkText = part.join("\n").trim();
     if (chunkText.length < 20) continue;
+    if (chunkText.length > config.indexing.maxChunkChars) {
+      if (config.indexing.skipOversizedChunks) continue;
+      const subChunks = splitOversizedChunk(chunkText, config.indexing.maxChunkChars);
+      for (const [j, subText] of subChunks.entries()) {
+        chunks.push({ file: rel, startLine: i + 1, endLine: Math.min(i + size, lines.length), text: `[part ${j + 1}/${subChunks.length}]\n${subText}`, hash });
+      }
+      continue;
+    }
     chunks.push({ file: rel, startLine: i + 1, endLine: Math.min(i + size, lines.length), text: chunkText, hash });
     if (i + size >= lines.length) break;
   }

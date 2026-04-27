@@ -84,6 +84,8 @@ Default config:
     "chunkLines": 80,
     "chunkOverlap": 20,
     "maxFileBytes": 512000,
+    "maxChunkChars": 12000,
+    "skipOversizedChunks": true,
     "includeExtensions": [".ts", ".tsx", ".js", ".jsx", ".mjs", ".cjs", ".py", ".lua", ".rs", ".go", ".java", ".cs", ".cpp", ".c", ".h", ".hpp", ".md", ".json", ".yaml", ".yml", ".toml", ".css", ".scss", ".html", ".svelte", ".vue"],
     "excludeDirs": [".git", ".pi", "node_modules", "dist", "build", "target", ".venv", "venv", "vendor", ".next", ".cache"]
   },
@@ -154,7 +156,7 @@ At session start, the extension syncs the index automatically.
 - `missing` — build only if the SQLite index does not exist
 - `always` — force a full rebuild at every session start
 
-A full rebuild is also triggered when indexing settings change, such as embedding model, chunk size, included extensions, excluded directories, or schema version.
+A full rebuild is also triggered when indexing settings change, such as embedding model, chunk size, included extensions, excluded directories, max chunk size, or schema version. Oversized chunks are skipped by default instead of failing the whole indexing run; tune `indexing.maxChunkChars` if your embedder supports larger inputs.
 
 ## Safety defaults
 

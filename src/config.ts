@@ -13,6 +13,8 @@ export interface SemanticGrepConfig {
     chunkLines: number;
     chunkOverlap: number;
     maxFileBytes: number;
+    maxChunkChars: number;
+    skipOversizedChunks: boolean;
     includeExtensions: string[];
     excludeDirs: string[];
   };
@@ -43,6 +45,8 @@ export const DEFAULT_CONFIG: SemanticGrepConfig = {
     chunkLines: 80,
     chunkOverlap: 20,
     maxFileBytes: 512_000,
+    maxChunkChars: 12_000,
+    skipOversizedChunks: true,
     includeExtensions: [
       ".ts", ".tsx", ".js", ".jsx", ".mjs", ".cjs",
       ".py", ".lua", ".rs", ".go", ".java", ".cs", ".cpp", ".c", ".h", ".hpp",

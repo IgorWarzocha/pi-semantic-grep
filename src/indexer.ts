@@ -25,6 +25,8 @@ function indexFingerprint(config: SemanticGrepConfig): string {
     includeExtensions: config.indexing.includeExtensions,
     excludeDirs: config.indexing.excludeDirs,
     maxFileBytes: config.indexing.maxFileBytes,
+    maxChunkChars: config.indexing.maxChunkChars,
+    skipOversizedChunks: config.indexing.skipOversizedChunks,
   };
   return crypto.createHash("sha256").update(JSON.stringify(payload)).digest("hex");
 }

@@ -1,0 +1,60 @@
+{
+  "name": "@howaboua/pi-semantic-grep",
+  "version": "0.1.0",
+  "description": "Semantic code and docs search for pi, backed by OpenAI-compatible embeddings and repo-local SQLite indexes.",
+  "type": "module",
+  "license": "MIT",
+  "author": "Igor Warzocha",
+  "homepage": "https://github.com/IgorWarzocha/pi-semantic-grep#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/IgorWarzocha/pi-semantic-grep.git"
+  },
+  "bugs": {
+    "url": "https://github.com/IgorWarzocha/pi-semantic-grep/issues"
+  },
+  "keywords": [
+    "pi",
+    "pi-extension",
+    "semantic-search",
+    "semantic-grep",
+    "embeddings",
+    "sqlite",
+    "rag",
+    "code-search"
+  ],
+  "files": [
+    "src",
+    "README.md",
+    "LICENSE"
+  ],
+  "pi": {
+    "extensions": [
+      "./src/index.ts"
+    ]
+  },
+  "scripts": {
+    "check": "tsc --noEmit",
+    "prepack": "npm run check"
+  },
+  "dependencies": {
+    "better-sqlite3": "^11.10.0",
+    "typebox": "^1.0.55"
+  },
+  "devDependencies": {
+    "@types/better-sqlite3": "^7.6.13",
+    "@types/node": "^24.0.0",
+    "typescript": "^5.8.3"
+  },
+  "peerDependencies": {
+    "@mariozechner/pi-coding-agent": "*",
+    "@mariozechner/pi-tui": "*"
+  },
+  "peerDependenciesMeta": {
+    "@mariozechner/pi-coding-agent": { "optional": true },
+    "@mariozechner/pi-tui": { "optional": true }
+  },
+  "publishConfig": {
+    "access": "public"
+  }
+}

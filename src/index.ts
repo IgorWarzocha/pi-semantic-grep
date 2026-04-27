@@ -1,0 +1,112 @@
+import { keyHint, type ExtensionAPI } from "@mariozechner/pi-coding-agent";
+import { Text } from "@mariozechner/pi-tui";
+import { Type } from "typebox";
+import { existsSync } from "node:fs";
+import { ensureConfig } from "./config.js";
+import { dbPathFor, openDb } from "./db.js";
+import { findRepoRoot } from "./files.js";
+import { syncIndex } from "./indexer.js";
+import { formatMatches, searchDb } from "./search.js";
+
+function cwdFromCtx(ctx: any): string {
+  return ctx?.cwd ?? process.cwd();
+}
+
+export default function semanticGrepExtension(pi: ExtensionAPI) {
+  ensureConfig();
+
+  pi.registerTool({
+    name: "semantic_grep",
+    label: "Semantic Grep",
+    description: "Find code or docs related to a natural-language query, even when exact words differ. Use for conceptual or cross-file discovery before answering or editing.",
+    promptSnippet: "Use semantic_grep to find relevant code/docs by meaning, especially for conceptual or cross-file questions.",
+    promptGuidelines: [
+      "Use early to discover relevant files, behavior, concepts, or docs.",
+      "Query for the behavior/concept you want, not just exact identifiers.",
+      "Inspect returned locations with available file tools before precise claims or edits.",
+      "For literal string occurrences, use exact text search if available.",
+    ],
+    parameters: Type.Object({
+      query: Type.String({ description: "Behavior, concept, feature, code path, or docs to find." }),
+      top_k: Type.Optional(Type.Number({ description: "Max matches to return. Default is usually enough; increase for broad discovery." })),
+    }),
+    renderCall(args: any, theme: any, _context: any) {
+      const query = typeof args.query === "string" ? args.query : "";
+      const shown = query.length > 90 ? `${query.slice(0, 87)}...` : query;
+      let text = theme.fg("toolTitle", theme.bold("semantic_grep "));
+      text += theme.fg("accent", `"${shown}"`);
+      if (args.top_k) text += theme.fg("dim", ` top_k=${args.top_k}`);
+      return new Text(text, 0, 0);
+    },
+
+    renderResult(result: any, { expanded, isPartial }: any, theme: any, _context: any) {
+      if (isPartial) return new Text(theme.fg("warning", "Searching semantic index…"), 0, 0);
+      if (result.details?.error) return new Text(theme.fg("error", result.content?.[0]?.text ?? result.details.error), 0, 0);
+
+      const matches = result.details?.matches ?? [];
+      if (!matches.length) return new Text(theme.fg("dim", "No semantic matches"), 0, 0);
+
+      let text = theme.fg("success", `${matches.length} semantic matches`);
+      text += theme.fg("dim", ` in ${result.details?.root ?? "repo"}`);
+      if (!expanded) text += theme.fg("muted", ` (${keyHint("app.tools.expand", "expand")})`);
+
+      const limit = expanded ? matches.length : Math.min(matches.length, 5);
+      for (const m of matches.slice(0, limit)) {
+        text += `\n${theme.fg("accent", `${m.file}:${m.startLine}-${m.endLine}`)} ${theme.fg("dim", `score=${m.score.toFixed(4)}`)}`;
+        if (expanded) {
+          const preview = m.text.split("\n").slice(0, 12).join("\n");
+          text += `\n${theme.fg("dim", preview)}`;
+        }
+      }
+      if (!expanded && matches.length > limit) text += `\n${theme.fg("muted", `… ${matches.length - limit} more`)}`;
+      return new Text(text, 0, 0);
+    },
+
+    async execute(_toolCallId: string, params: any, signal: AbortSignal, _onUpdate: any, ctx: any) {
+      const config = ensureConfig();
+      const root = findRepoRoot(cwdFromCtx(ctx));
+      const dbFile = dbPathFor(root);
+      if (!existsSync(dbFile)) {
+        return {
+          content: [{ type: "text", text: `Semantic grep index not found at ${dbFile}. It should be created automatically at session start; check extension logs/status.` }],
+          details: { error: "missing_index", dbFile },
+        };
+      }
+      const topK = Math.min(Math.max(1, params.top_k ?? config.search.defaultTopK), config.search.maxTopK);
+      const db = openDb(root);
+      try {
+        const matches = await searchDb(db, params.query, topK, config, signal);
+        return {
+          content: [{ type: "text", text: formatMatches(matches) }],
+          details: { root, dbFile, query: params.query, matches },
+        };
+      } finally {
+        db.close();
+      }
+    },
+  });
+
+
+
+  pi.on("session_start", async (_event: any, ctx: any) => {
+    const config = ensureConfig();
+    if (!config.autoIndex.enabled) return;
+
+    const root = findRepoRoot(cwdFromCtx(ctx));
+    const dbFile = dbPathFor(root);
+    if (config.autoIndex.mode === "missing" && existsSync(dbFile)) return;
+    const forceFullRebuild = config.autoIndex.mode === "always";
+
+    const db = openDb(root);
+    ctx.ui.setStatus("semantic-grep", "indexing…");
+    try {
+      const stats = await syncIndex(db, root, config, forceFullRebuild, undefined, (msg) => ctx.ui.setStatus("semantic-grep", msg));
+      ctx.ui.notify(`Semantic grep synced ${stats.files} files: +${stats.added} ~${stats.changed} -${stats.deleted}, ${stats.unchanged} unchanged${stats.fullRebuild ? " (full rebuild)" : ""}`, "success");
+    } catch (err) {
+      ctx.ui.notify(`Semantic grep indexing failed: ${err instanceof Error ? err.message : String(err)}`, "error");
+    } finally {
+      ctx.ui.setStatus("semantic-grep", "");
+      db.close();
+    }
+  });
+}

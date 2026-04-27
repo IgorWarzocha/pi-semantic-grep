@@ -1,6 +1,6 @@
 {
   "name": "@howaboua/pi-semantic-grep",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Semantic code and docs search for pi, backed by OpenAI-compatible embeddings and repo-local SQLite indexes.",
   "type": "module",
   "license": "MIT",
@@ -51,8 +51,12 @@
     "@mariozechner/pi-tui": "*"
   },
   "peerDependenciesMeta": {
-    "@mariozechner/pi-coding-agent": { "optional": true },
-    "@mariozechner/pi-tui": { "optional": true }
+    "@mariozechner/pi-coding-agent": {
+      "optional": true
+    },
+    "@mariozechner/pi-tui": {
+      "optional": true
+    }
   },
   "publishConfig": {
     "access": "public"

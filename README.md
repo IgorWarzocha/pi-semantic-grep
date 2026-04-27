@@ -94,6 +94,12 @@ Default config:
   "autoIndex": {
     "enabled": true,
     "mode": "incremental"
+  },
+  "safety": {
+    "requireProjectMarker": true,
+    "projectMarkers": [".git", "package.json", "pyproject.toml", "Cargo.toml", "go.mod", "deno.json", "bun.lock", "pnpm-lock.yaml", "yarn.lock"],
+    "denyRootBasenames": ["Desktop", "Documents", "Downloads", "Pictures", "Music", "Movies", "Videos", "Public", "Templates", "Applications", "Library", "System", "Volumes", "Users", "Program Files", "Program Files (x86)", "ProgramData", "Windows", "PerfLogs", "AppData", "OneDrive", "Dropbox", "Google Drive", "iCloud Drive"],
+    "denyRootPaths": ["~", "/", "C:\\", "C:/"]
   }
 }
 ```
@@ -149,6 +155,12 @@ At session start, the extension syncs the index automatically.
 - `always` — force a full rebuild at every session start
 
 A full rebuild is also triggered when indexing settings change, such as embedding model, chunk size, included extensions, excluded directories, or schema version.
+
+## Safety defaults
+
+The extension intentionally avoids indexing broad system or user directories. By default it requires a project marker such as `.git`, `package.json`, `pyproject.toml`, `Cargo.toml`, or `go.mod`, and refuses protected roots like `~`, `/`, `C:\\`, plus common Windows/macOS/Linux home folders such as Desktop, Documents, Downloads, Pictures, Applications, Library, Program Files, Windows, AppData, OneDrive, Dropbox, Google Drive, and iCloud Drive.
+
+You can adjust these rules in `~/.pi/agent/semantic-grep.json` under `safety`.
 
 ## Tool available to the agent
 

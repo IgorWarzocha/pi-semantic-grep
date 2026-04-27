@@ -24,6 +24,12 @@ export interface SemanticGrepConfig {
     enabled: boolean;
     mode: "incremental" | "always" | "missing";
   };
+  safety: {
+    requireProjectMarker: boolean;
+    projectMarkers: string[];
+    denyRootBasenames: string[];
+    denyRootPaths: string[];
+  };
 }
 
 export const CONFIG_PATH = path.join(homedir(), ".pi", "agent", "semantic-grep.json");
@@ -51,6 +57,17 @@ export const DEFAULT_CONFIG: SemanticGrepConfig = {
   autoIndex: {
     enabled: true,
     mode: "incremental",
+  },
+  safety: {
+    requireProjectMarker: true,
+    projectMarkers: [".git", "package.json", "pyproject.toml", "Cargo.toml", "go.mod", "deno.json", "bun.lock", "pnpm-lock.yaml", "yarn.lock"],
+    denyRootBasenames: [
+      "Desktop", "Documents", "Downloads", "Pictures", "Music", "Movies", "Videos", "Public", "Templates",
+      "Applications", "Library", "System", "Volumes", "Users",
+      "Program Files", "Program Files (x86)", "ProgramData", "Windows", "PerfLogs",
+      "AppData", "OneDrive", "Dropbox", "Google Drive", "iCloud Drive"
+    ],
+    denyRootPaths: ["~", "/", "C:\\", "C:/"],
   },
 };
 

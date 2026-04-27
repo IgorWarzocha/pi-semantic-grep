@@ -4,7 +4,7 @@ import { Type } from "typebox";
 import { existsSync } from "node:fs";
 import { ensureConfig } from "./config.js";
 import { dbPathFor, openDb } from "./db.js";
-import { findRepoRoot } from "./files.js";
+import { denyReason, findProjectRoot } from "./root.js";
 import { syncIndex } from "./indexer.js";
 import { formatMatches, searchDb } from "./search.js";
 
@@ -64,7 +64,20 @@ export default function semanticGrepExtension(pi: ExtensionAPI) {
 
     async execute(_toolCallId: string, params: any, signal: AbortSignal, _onUpdate: any, ctx: any) {
       const config = ensureConfig();
-      const root = findRepoRoot(cwdFromCtx(ctx));
+      const root = findProjectRoot(cwdFromCtx(ctx), config);
+      if (!root) {
+        return {
+          content: [{ type: "text", text: "Semantic grep skipped: no project marker found." }],
+          details: { error: "no_project_root" },
+        };
+      }
+      const denied = denyReason(root, config);
+      if (denied) {
+        return {
+          content: [{ type: "text", text: `Semantic grep skipped: ${denied}.` }],
+          details: { error: "denied_root", root, reason: denied },
+        };
+      }
       const dbFile = dbPathFor(root);
       if (!existsSync(dbFile)) {
         return {
@@ -92,7 +105,16 @@ export default function semanticGrepExtension(pi: ExtensionAPI) {
     const config = ensureConfig();
     if (!config.autoIndex.enabled) return;
 
-    const root = findRepoRoot(cwdFromCtx(ctx));
+    const root = findProjectRoot(cwdFromCtx(ctx), config);
+    if (!root) {
+      ctx.ui.notify("Semantic grep skipped: no project marker found.", "warning");
+      return;
+    }
+    const denied = denyReason(root, config);
+    if (denied) {
+      ctx.ui.notify(`Semantic grep skipped: ${denied}.`, "warning");
+      return;
+    }
     const dbFile = dbPathFor(root);
     if (config.autoIndex.mode === "missing" && existsSync(dbFile)) return;
     const forceFullRebuild = config.autoIndex.mode === "always";

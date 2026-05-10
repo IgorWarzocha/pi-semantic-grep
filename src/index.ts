@@ -18,17 +18,17 @@ export default function semanticGrepExtension(pi: ExtensionAPI) {
   pi.registerTool({
     name: "semantic_grep",
     label: "Semantic Grep",
-    description: "Find code or docs related to a natural-language query, even when exact words differ. Use for conceptual or cross-file discovery before answering or editing.",
-    promptSnippet: "Use semantic_grep to find relevant code/docs by meaning, especially for conceptual or cross-file questions.",
+    description: "Search code and docs by meaning.",
+    promptSnippet: "Use semantic_grep for conceptual code/docs discovery.",
     promptGuidelines: [
-      "Use early to discover relevant files, behavior, concepts, or docs.",
-      "Query for the behavior/concept you want, not just exact identifiers.",
-      "Inspect returned locations with available file tools before precise claims or edits.",
-      "For literal string occurrences, use exact text search if available.",
+      "`semantic_grep`: Use early for conceptual or cross-file discovery.",
+      "`semantic_grep`: Query for behavior, concepts, features, or code paths—not just exact identifiers.",
+      "`semantic_grep`: Inspect returned locations with file-reading tools before making precise claims or edits.",
+      "`semantic_grep`: Use exact text search instead when you need literal string occurrences.",
     ],
     parameters: Type.Object({
-      query: Type.String({ description: "Behavior, concept, feature, code path, or docs to find." }),
-      top_k: Type.Optional(Type.Number({ description: "Max matches to return. Default is usually enough; increase for broad discovery." })),
+      query: Type.String({ description: "Natural-language search query." }),
+      top_k: Type.Optional(Type.Number({ description: "Maximum matches to return." })),
     }),
     renderCall(args: any, theme: any, _context: any) {
       const query = typeof args.query === "string" ? args.query : "";

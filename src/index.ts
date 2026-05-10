@@ -21,10 +21,10 @@ export default function semanticGrepExtension(pi: ExtensionAPI) {
     description: "Search code and docs by meaning.",
     promptSnippet: "Use semantic_grep for conceptual code/docs discovery.",
     promptGuidelines: [
-      "`semantic_grep`: Use early for conceptual or cross-file discovery.",
-      "`semantic_grep`: Query for behavior, concepts, features, or code paths—not just exact identifiers.",
-      "`semantic_grep`: Inspect returned locations with file-reading tools before making precise claims or edits.",
-      "`semantic_grep`: Use exact text search instead when you need literal string occurrences.",
+      "semantic_grep: Use early for conceptual or cross-file discovery.",
+      "semantic_grep: Query for behavior, concepts, features, or code paths—not just exact identifiers.",
+      "semantic_grep: Inspect returned locations with file-reading tools before making precise claims or edits.",
+      "semantic_grep: Use exact text search instead when you need literal string occurrences.",
     ],
     parameters: Type.Object({
       query: Type.String({ description: "Natural-language search query." }),

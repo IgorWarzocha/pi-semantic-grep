@@ -8,6 +8,7 @@ export interface SemanticGrepConfig {
     model: string;
     apiKey?: string;
     dimensions?: number;
+    batchSize?: number;
   };
   indexing: {
     chunkLines: number;
@@ -40,6 +41,7 @@ export const DEFAULT_CONFIG: SemanticGrepConfig = {
   embeddings: {
     url: "http://127.0.0.1:1234/v1/embeddings",
     model: "text-embedding-embeddinggemma-300m-qat",
+    batchSize: 16,
   },
   indexing: {
     chunkLines: 80,

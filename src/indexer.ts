@@ -1,6 +1,6 @@
 import type Database from "better-sqlite3";
 import crypto from "node:crypto";
-import { embed } from "./embeddings.js";
+import { embedBatch } from "./embeddings.js";
 import { chunkFile, listIndexableFiles, readFileSnapshot } from "./files.js";
 import type { SemanticGrepConfig } from "./config.js";
 import { acquireIndexLock, getMeta, resetDb, setMeta, type FileRow, type IndexLock } from "./db.js";
@@ -44,11 +44,13 @@ async function indexOneFile(db: Database.Database, root: string, file: string, s
   // Embed all chunks BEFORE touching the DB so partial-state on kill is impossible:
   // a) no write happens until every embedding succeeds; b) all writes commit in one txn.
   const vectors: string[] = new Array(chunks.length);
-  for (let i = 0; i < chunks.length; i++) {
+  const batchSize = Math.max(1, config.embeddings.batchSize ?? 16);
+  for (let start = 0; start < chunks.length; start += batchSize) {
     signal?.throwIfAborted();
-    const chunk = chunks[i];
-    const vector = await embed(`File: ${chunk.file}\nLines: ${chunk.startLine}-${chunk.endLine}\n\n${chunk.text}`, config, signal);
-    vectors[i] = JSON.stringify(vector);
+    const batch = chunks.slice(start, start + batchSize);
+    const inputs = batch.map((chunk) => `File: ${chunk.file}\nLines: ${chunk.startLine}-${chunk.endLine}\n\n${chunk.text}`);
+    const embedded = await embedBatch(inputs, config, signal);
+    for (let i = 0; i < embedded.length; i++) vectors[start + i] = JSON.stringify(embedded[i]);
   }
   signal?.throwIfAborted();
 

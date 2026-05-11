@@ -5,7 +5,7 @@ import { existsSync } from "node:fs";
 import { ensureConfig } from "./config.js";
 import { dbPathFor, openDb } from "./db.js";
 import { denyReason, findProjectRoot } from "./root.js";
-import { syncIndex } from "./indexer.js";
+import { IndexerLockedError, syncIndex } from "./indexer.js";
 import { formatMatches, searchDb } from "./search.js";
 
 function cwdFromCtx(ctx: any): string {
@@ -101,7 +101,11 @@ export default function semanticGrepExtension(pi: ExtensionAPI) {
 
 
 
-  pi.on("session_start", async (_event: any, ctx: any) => {
+  pi.on("session_start", (_event: any, ctx: any) => {
+    void runAutoIndex(ctx);
+  });
+
+  async function runAutoIndex(ctx: any): Promise<void> {
     const config = ensureConfig();
     if (!config.autoIndex.enabled) return;
 
@@ -120,15 +124,48 @@ export default function semanticGrepExtension(pi: ExtensionAPI) {
     const forceFullRebuild = config.autoIndex.mode === "always";
 
     const db = openDb(root);
-    ctx.ui.setStatus("semantic-grep", "indexing…");
+    const setStatus = (s: string): void => {
+      try { ctx.ui.setStatus("semantic-grep", s); } catch { /* stale ctx — ignore */ }
+    };
+    setStatus("indexing…");
+
+    // Throttle progress so the footer doesn't strobe on per-file events. Paint on
+    // >=1% delta OR >=500ms since last paint, plus always paint the final state.
+    // The library still emits per file; only the UI is rate-limited.
+    let lastEmitMs = 0;
+    let lastPct = -1;
+    const STATUS_MIN_INTERVAL_MS = 500;
+    const STATUS_MIN_PCT_DELTA = 1;
+    const progressRe = /^\[(\d+)\/(\d+)\]/;
+    const handleProgress = (msg: string): void => {
+      const m = progressRe.exec(msg);
+      if (!m) { setStatus(msg); return; }
+      const i = Number.parseInt(m[1], 10);
+      const n = Number.parseInt(m[2], 10);
+      if (!Number.isFinite(i) || !Number.isFinite(n) || n <= 0) { setStatus(msg); return; }
+      const pct = Math.floor((i * 100) / n);
+      const now = Date.now();
+      const ageOk = now - lastEmitMs >= STATUS_MIN_INTERVAL_MS;
+      const pctOk = pct - lastPct >= STATUS_MIN_PCT_DELTA;
+      const isLast = i >= n;
+      if (!ageOk && !pctOk && !isLast) return;
+      lastEmitMs = now;
+      lastPct = pct;
+      setStatus(`indexing ${i}/${n} (${pct}%)`);
+    };
+
     try {
-      const stats = await syncIndex(db, root, config, forceFullRebuild, undefined, (msg) => ctx.ui.setStatus("semantic-grep", msg));
+      const stats = await syncIndex(db, root, config, forceFullRebuild, undefined, handleProgress);
       ctx.ui.notify(`Semantic grep synced ${stats.files} files: +${stats.added} ~${stats.changed} -${stats.deleted}, ${stats.unchanged} unchanged${stats.fullRebuild ? " (full rebuild)" : ""}`, "success");
     } catch (err) {
-      ctx.ui.notify(`Semantic grep indexing failed: ${err instanceof Error ? err.message : String(err)}`, "error");
+      if (err instanceof IndexerLockedError) {
+        ctx.ui.notify("Semantic grep: another session is already indexing this repo; this session will use the existing index.", "info");
+      } else {
+        ctx.ui.notify(`Semantic grep indexing failed: ${err instanceof Error ? err.message : String(err)}`, "error");
+      }
     } finally {
-      ctx.ui.setStatus("semantic-grep", "");
+      setStatus("");
       db.close();
     }
-  });
+  }
 }

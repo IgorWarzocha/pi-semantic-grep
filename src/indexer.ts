@@ -3,7 +3,14 @@ import crypto from "node:crypto";
 import { embed } from "./embeddings.js";
 import { chunkFile, listIndexableFiles, readFileSnapshot } from "./files.js";
 import type { SemanticGrepConfig } from "./config.js";
-import { getMeta, resetDb, setMeta, type FileRow } from "./db.js";
+import { acquireIndexLock, getMeta, resetDb, setMeta, type FileRow, type IndexLock } from "./db.js";
+
+export class IndexerLockedError extends Error {
+  constructor() {
+    super("another process is already indexing this repo");
+    this.name = "IndexerLockedError";
+  }
+}
 
 export interface IndexStats {
   files: number;
@@ -32,23 +39,48 @@ function indexFingerprint(config: SemanticGrepConfig): string {
 }
 
 async function indexOneFile(db: Database.Database, root: string, file: string, snapshot: NonNullable<ReturnType<typeof readFileSnapshot>>, config: SemanticGrepConfig, signal?: AbortSignal): Promise<number> {
-  db.prepare("delete from chunks where file = ?").run(file);
-  db.prepare("delete from files where file = ?").run(file);
-
   const chunks = chunkFile(root, file, config, snapshot.hash);
+
+  // Embed all chunks BEFORE touching the DB so partial-state on kill is impossible:
+  // a) no write happens until every embedding succeeds; b) all writes commit in one txn.
+  const vectors: string[] = new Array(chunks.length);
+  for (let i = 0; i < chunks.length; i++) {
+    signal?.throwIfAborted();
+    const chunk = chunks[i];
+    const vector = await embed(`File: ${chunk.file}\nLines: ${chunk.startLine}-${chunk.endLine}\n\n${chunk.text}`, config, signal);
+    vectors[i] = JSON.stringify(vector);
+  }
+  signal?.throwIfAborted();
+
   const insertChunk = db.prepare("insert into chunks (file, start_line, end_line, text, hash, vector) values (?, ?, ?, ?, ?, ?)");
   const insertFile = db.prepare("insert into files (file, hash, size, mtime_ms, indexed_at) values (?, ?, ?, ?, ?)");
+  const deleteChunks = db.prepare("delete from chunks where file = ?");
+  const deleteFile = db.prepare("delete from files where file = ?");
 
-  insertFile.run(file, snapshot.hash, snapshot.size, snapshot.mtimeMs, new Date().toISOString());
-  for (const chunk of chunks) {
-    signal?.throwIfAborted();
-    const vector = await embed(`File: ${chunk.file}\nLines: ${chunk.startLine}-${chunk.endLine}\n\n${chunk.text}`, config, signal);
-    insertChunk.run(chunk.file, chunk.startLine, chunk.endLine, chunk.text, chunk.hash, JSON.stringify(vector));
-  }
+  const writeAtomic = db.transaction(() => {
+    deleteChunks.run(file);
+    deleteFile.run(file);
+    insertFile.run(file, snapshot.hash, snapshot.size, snapshot.mtimeMs, new Date().toISOString());
+    for (let i = 0; i < chunks.length; i++) {
+      const c = chunks[i];
+      insertChunk.run(c.file, c.startLine, c.endLine, c.text, c.hash, vectors[i]);
+    }
+  });
+  writeAtomic();
   return chunks.length;
 }
 
 export async function syncIndex(db: Database.Database, root: string, config: SemanticGrepConfig, forceFullRebuild = false, signal?: AbortSignal, onProgress?: (msg: string) => void): Promise<IndexStats> {
+  const lock: IndexLock | undefined = acquireIndexLock(root);
+  if (!lock) throw new IndexerLockedError();
+  try {
+    return await syncIndexLocked(db, root, config, forceFullRebuild, signal, onProgress);
+  } finally {
+    lock.release();
+  }
+}
+
+async function syncIndexLocked(db: Database.Database, root: string, config: SemanticGrepConfig, forceFullRebuild: boolean, signal?: AbortSignal, onProgress?: (msg: string) => void): Promise<IndexStats> {
   const fingerprint = indexFingerprint(config);
   const priorFingerprint = getMeta(db, "index_fingerprint");
   const fullRebuild = forceFullRebuild || priorFingerprint !== fingerprint;
@@ -61,10 +93,15 @@ export async function syncIndex(db: Database.Database, root: string, config: Sem
 
   let chunks = 0, added = 0, changed = 0, unchanged = 0, deleted = 0;
 
+  const deleteOrphanChunks = db.prepare("delete from chunks where file = ?");
+  const deleteOrphanFile = db.prepare("delete from files where file = ?");
+  const dropOrphan = db.transaction((file: string) => {
+    deleteOrphanChunks.run(file);
+    deleteOrphanFile.run(file);
+  });
   for (const row of knownRows) {
     if (!current.has(row.file)) {
-      db.prepare("delete from chunks where file = ?").run(row.file);
-      db.prepare("delete from files where file = ?").run(row.file);
+      dropOrphan(row.file);
       deleted++;
     }
   }

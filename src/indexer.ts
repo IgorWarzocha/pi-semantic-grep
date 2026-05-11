@@ -22,6 +22,10 @@ export interface IndexStats {
   fullRebuild: boolean;
 }
 
+function yieldToEventLoop(ms = 0): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
 function indexFingerprint(config: SemanticGrepConfig): string {
   const payload = {
     schema: 2,
@@ -51,6 +55,7 @@ async function indexOneFile(db: Database.Database, root: string, file: string, s
     const inputs = batch.map((chunk) => `File: ${chunk.file}\nLines: ${chunk.startLine}-${chunk.endLine}\n\n${chunk.text}`);
     const embedded = await embedBatch(inputs, config, signal);
     for (let i = 0; i < embedded.length; i++) vectors[start + i] = JSON.stringify(embedded[i]);
+    await yieldToEventLoop(config.embeddings.yieldMs ?? 0);
   }
   signal?.throwIfAborted();
 
@@ -123,6 +128,8 @@ async function syncIndexLocked(db: Database.Database, root: string, config: Sema
     if (old) changed++; else added++;
     onProgress?.(`[${i + 1}/${files.length}] indexing ${file}`);
     chunks += await indexOneFile(db, root, file, snapshot, config, signal);
+    const yieldEveryFiles = Math.max(1, config.embeddings.yieldEveryFiles ?? 1);
+    if ((added + changed) % yieldEveryFiles === 0) await yieldToEventLoop(config.embeddings.yieldMs ?? 0);
   }
 
   setMeta(db, "index_fingerprint", fingerprint);

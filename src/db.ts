@@ -51,7 +51,9 @@ export function acquireIndexLock(root: string, staleMs = 10 * 60_000): IndexLock
         release(): void {
           if (released) return;
           released = true;
-          try { unlinkSync(file); } catch { /* ignore */ }
+          try {
+            if (readFileSync(file, "utf8").trim() === payload) unlinkSync(file);
+          } catch { /* ignore */ }
         },
       };
     } catch {

@@ -43,9 +43,9 @@ export const DEFAULT_CONFIG: SemanticGrepConfig = {
   embeddings: {
     url: "http://127.0.0.1:1234/v1/embeddings",
     model: "text-embedding-embeddinggemma-300m-qat",
-    batchSize: 16,
+    batchSize: 8,
     yieldEveryFiles: 1,
-    yieldMs: 0,
+    yieldMs: 25,
   },
   indexing: {
     chunkLines: 80,

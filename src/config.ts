@@ -15,6 +15,7 @@ export interface SemanticGrepConfig {
     maxFileBytes: number;
     maxChunkChars: number;
     skipOversizedChunks: boolean;
+    followSymlinks: boolean;
     includeExtensions: string[];
     excludeDirs: string[];
   };
@@ -35,6 +36,7 @@ export interface SemanticGrepConfig {
 }
 
 export const CONFIG_PATH = path.join(homedir(), ".pi", "agent", "semantic-grep.json");
+export const PROJECT_CONFIG_BASENAME = path.join(".pi", "semantic-grep.json");
 
 export const DEFAULT_CONFIG: SemanticGrepConfig = {
   embeddings: {
@@ -47,6 +49,7 @@ export const DEFAULT_CONFIG: SemanticGrepConfig = {
     maxFileBytes: 512_000,
     maxChunkChars: 12_000,
     skipOversizedChunks: false,
+    followSymlinks: false,
     includeExtensions: [
       ".ts", ".tsx", ".js", ".jsx", ".mjs", ".cjs",
       ".py", ".lua", ".rs", ".go", ".java", ".cs", ".cpp", ".c", ".h", ".hpp",
@@ -87,12 +90,27 @@ function deepMerge<T>(base: T, override: Partial<T>): T {
   return out;
 }
 
-export function ensureConfig(): SemanticGrepConfig {
+function readConfigFile(file: string): Partial<SemanticGrepConfig> {
+  return JSON.parse(readFileSync(file, "utf8")) as Partial<SemanticGrepConfig>;
+}
+
+export function ensureConfig(projectRoot?: string): SemanticGrepConfig {
   mkdirSync(path.dirname(CONFIG_PATH), { recursive: true });
   if (!existsSync(CONFIG_PATH)) {
     writeFileSync(CONFIG_PATH, JSON.stringify(DEFAULT_CONFIG, null, "\t") + "\n");
-    return DEFAULT_CONFIG;
   }
-  const user = JSON.parse(readFileSync(CONFIG_PATH, "utf8")) as Partial<SemanticGrepConfig>;
-  return deepMerge(DEFAULT_CONFIG, user);
+
+  const user = readConfigFile(CONFIG_PATH);
+  const globalConfig = deepMerge(DEFAULT_CONFIG, user);
+
+  if (!projectRoot) {
+    return globalConfig;
+  }
+
+  const projectConfigPath = path.join(projectRoot, PROJECT_CONFIG_BASENAME);
+  if (!existsSync(projectConfigPath)) {
+    return globalConfig;
+  }
+
+  return deepMerge(globalConfig, readConfigFile(projectConfigPath));
 }

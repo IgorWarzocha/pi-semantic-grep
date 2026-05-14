@@ -86,6 +86,7 @@ Default config:
     "maxFileBytes": 512000,
     "maxChunkChars": 12000,
     "skipOversizedChunks": false,
+    "followSymlinks": false,
     "includeExtensions": [".ts", ".tsx", ".js", ".jsx", ".mjs", ".cjs", ".py", ".lua", ".rs", ".go", ".java", ".cs", ".cpp", ".c", ".h", ".hpp", ".md", ".json", ".yaml", ".yml", ".toml", ".css", ".scss", ".html", ".svelte", ".vue"],
     "excludeDirs": [".git", ".pi", "node_modules", "dist", "build", "target", ".venv", "venv", "vendor", ".next", ".cache"]
   },
@@ -147,6 +148,16 @@ The index is stored per repository:
 ```text
 <repo>/.pi/semantic-grep.sqlite
 ```
+
+Global config lives at `~/.pi/agent/semantic-grep.json`. A repository may also define a project override at:
+
+```text
+<repo>/.pi/semantic-grep.json
+```
+
+Project config is merged over the global config. Nested objects are merged; arrays such as `indexing.excludeDirs` replace the global array, so include the defaults you still want.
+
+By default the file walker does not follow or index symlinks. Set `indexing.followSymlinks` to `true` globally or in a project config if a repository intentionally keeps indexable code behind symlinks.
 
 At session start, the extension syncs the index automatically.
 

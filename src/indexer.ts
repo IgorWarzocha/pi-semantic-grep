@@ -17,7 +17,7 @@ export interface IndexStats {
 
 function indexFingerprint(config: SemanticGrepConfig): string {
   const payload = {
-    schema: 2,
+    schema: 4,
     model: config.embeddings.model,
     dimensions: config.embeddings.dimensions ?? null,
     chunkLines: config.indexing.chunkLines,
@@ -27,6 +27,7 @@ function indexFingerprint(config: SemanticGrepConfig): string {
     maxFileBytes: config.indexing.maxFileBytes,
     maxChunkChars: config.indexing.maxChunkChars,
     skipOversizedChunks: config.indexing.skipOversizedChunks,
+    followSymlinks: config.indexing.followSymlinks,
   };
   return crypto.createHash("sha256").update(JSON.stringify(payload)).digest("hex");
 }

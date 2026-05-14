@@ -33,6 +33,7 @@ export function findRepoRoot(cwd: string): string {
 
 function walk(dir: string, root: string, config: SemanticGrepConfig, out: string[]): void {
   for (const ent of readdirSync(dir, { withFileTypes: true })) {
+    if (ent.isSymbolicLink() && !config.indexing.followSymlinks) continue;
     const abs = path.join(dir, ent.name);
     if (ent.isDirectory()) {
       if (!config.indexing.excludeDirs.includes(ent.name)) walk(abs, root, config, out);

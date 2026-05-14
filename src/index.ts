@@ -63,14 +63,15 @@ export default function semanticGrepExtension(pi: ExtensionAPI) {
     },
 
     async execute(_toolCallId: string, params: any, signal: AbortSignal, _onUpdate: any, ctx: any) {
-      const config = ensureConfig();
-      const root = findProjectRoot(cwdFromCtx(ctx), config);
+      const baseConfig = ensureConfig();
+      const root = findProjectRoot(cwdFromCtx(ctx), baseConfig);
       if (!root) {
         return {
           content: [{ type: "text", text: "Semantic grep skipped: no project marker found." }],
           details: { error: "no_project_root" },
         };
       }
+      const config = ensureConfig(root);
       const denied = denyReason(root, config);
       if (denied) {
         return {
@@ -102,14 +103,17 @@ export default function semanticGrepExtension(pi: ExtensionAPI) {
 
 
   pi.on("session_start", async (_event: any, ctx: any) => {
-    const config = ensureConfig();
-    if (!config.autoIndex.enabled) return;
+    const baseConfig = ensureConfig();
+    if (!baseConfig.autoIndex.enabled) return;
 
-    const root = findProjectRoot(cwdFromCtx(ctx), config);
+    const root = findProjectRoot(cwdFromCtx(ctx), baseConfig);
     if (!root) {
       ctx.ui.notify("Semantic grep skipped: no project marker found.", "warning");
       return;
     }
+    const config = ensureConfig(root);
+    if (!config.autoIndex.enabled) return;
+
     const denied = denyReason(root, config);
     if (denied) {
       ctx.ui.notify(`Semantic grep skipped: ${denied}.`, "warning");
